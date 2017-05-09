@@ -1086,33 +1086,34 @@ typedef int (*read_actor_t)(read_descriptor_t *, struct page *, unsigned long, u
  * can be called without the big kernel lock held in all filesystems.
  */
 struct file_operations {
-	struct module *owner;		//����һ��ָ��ӵ������ṹ��ģ���ָ��
-	loff_t (*llseek) (struct file *, loff_t, int);
-	ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);
-	ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);
-	ssize_t (*aio_read) (struct kiocb *, const struct iovec *, unsigned long, loff_t);
-	ssize_t (*aio_write) (struct kiocb *, const struct iovec *, unsigned long, loff_t);
-	int (*readdir) (struct file *, void *, filldir_t);
-	unsigned int (*poll) (struct file *, struct poll_table_struct *);
-	int (*ioctl) (struct inode *, struct file *, unsigned int, unsigned long);
-	long (*unlocked_ioctl) (struct file *, unsigned int, unsigned long);
+	struct module *owner;		//声明一个指向拥有这个结构的模块的指针
+	loff_t (*llseek) (struct file *, loff_t, int);		//改变文件中的当前读写位置，并且新位置作为返回值(且为正)
+	ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);		//从设备中获取数据
+	ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);	//发送数据给设备
+	ssize_t (*aio_read) (struct kiocb *, const struct iovec *, unsigned long, loff_t);	//初始化一个异步读
+	ssize_t (*aio_write) (struct kiocb *, const struct iovec *, unsigned long, loff_t);	//初始化一个异步写
+	int (*readdir) (struct file *, void *, filldir_t);	//读取目录，并且仅对文件系统有用
+	unsigned int (*poll) (struct file *, struct poll_table_struct *);	//查询对一个或多个文件描述符的读或写是否会阻塞
+	int (*ioctl) (struct inode *, struct file *, unsigned int, unsigned long);	//ioctl系统调用提供了发出设备特定命令的方法
+	long (*unlocked_ioctl) (struct file *, unsigned int, unsigned long);	
 	long (*compat_ioctl) (struct file *, unsigned int, unsigned long);
-	int (*mmap) (struct file *, struct vm_area_struct *);
-	int (*open) (struct inode *, struct file *);
-	int (*flush) (struct file *, fl_owner_t id);
-	int (*release) (struct inode *, struct file *);
-	int (*fsync) (struct file *, struct dentry *, int datasync);
-	int (*aio_fsync) (struct kiocb *, int datasync);
-	int (*fasync) (int, struct file *, int);
-	int (*lock) (struct file *, int, struct file_lock *);
-	ssize_t (*sendfile) (struct file *, loff_t *, size_t, read_actor_t, void *);
-	ssize_t (*sendpage) (struct file *, struct page *, int, size_t, loff_t *, int);
-	unsigned long (*get_unmapped_area)(struct file *, unsigned long, unsigned long, unsigned long, unsigned long);
-	int (*check_flags)(int);
-	int (*dir_notify)(struct file *filp, unsigned long arg);
-	int (*flock) (struct file *, int, struct file_lock *);
+	int (*mmap) (struct file *, struct vm_area_struct *);	//用来请求将设备内存映射到进程的地址空间
+	int (*open) (struct inode *, struct file *);	//这常常是对设备文件进行的第一个操作，不要求驱动声明一个对的方法
+	int (*flush) (struct file *, fl_owner_t id);	//flush操作在进程关闭它的设备文件描述符的复制时调用，很少用到
+	int (*release) (struct inode *, struct file *);		//在文件结构释放时引用这个操作
+	int (*fsync) (struct file *, struct dentry *, int datasync);	//fsync系统调用的后端，用户用来刷新任何挂着的数据
+	int (*aio_fsync) (struct kiocb *, int datasync);	//fsync的异步版本
+	int (*fasync) (int, struct file *, int);	//用来通知设备它的FASYNC标志的改变
+	int (*lock) (struct file *, int, struct file_lock *);	//用来实现文件加锁
+	ssize_t (*sendfile) (struct file *, loff_t *, size_t, read_actor_t, void *);	//实现sendfile系统调用的读
+	ssize_t (*sendpage) (struct file *, struct page *, int, size_t, loff_t *, int);		//sendpage是sendfile的另一半，它由内核调用来发送数据
+	unsigned long (*get_unmapped_area)(struct file *, unsigned long, unsigned long, unsigned long, unsigned long);		//这个方法的目的是在进程的地址空间找一个位置来映射在底层设备上的段
+	int (*check_flags)(int);	//这个方法允许模块检查传递给fntl(F_SETFL...)调用的标志
+	int (*dir_notify)(struct file *filp, unsigned long arg);	//这个方法在应用程序使用fcntl请求目录改变通知时调用
+	int (*flock) (struct file *, int, struct file_lock *);		
+	//以下两个实现发散/汇聚读和写操作
 	ssize_t (*splice_write)(struct pipe_inode_info *, struct file *, loff_t *, size_t, unsigned int);
-	ssize_t (*splice_read)(struct file *, loff_t *, struct pipe_inode_info *, size_t, unsigned int);
+	ssize_t (*splice_read)(struct file *, loff_t *, struct pipe_inode_info *, size_t, unsigned int);	
 };
 
 struct inode_operations {
