@@ -50,13 +50,13 @@ static struct kobj_map *cdev_map;
 static DEFINE_MUTEX(chrdevs_lock);
 
 static struct char_device_struct {
-	struct char_device_struct *next;
-	unsigned int major;
-	unsigned int baseminor;
-	int minorct;
-	char name[64];
-	struct file_operations *fops;
-	struct cdev *cdev;		/* will die */
+	struct char_device_struct *next;	/*指向散列冲突链表中的下一个元素的指针*/
+	unsigned int major;		/*主设备号*/
+	unsigned int baseminor;		/*起始次设备号*/
+	int minorct;	/*设备编号的范围的大小*/
+	char name[64];		/*处理该设备编号范围内的设备驱动的名称*/
+	struct file_operations *fops;	/*没有使用*/
+	struct cdev *cdev;		/* will die  指向字符设备驱动程序描述符的指针*/
 } *chrdevs[CHRDEV_MAJOR_HASH_SIZE];
 
 /* index in the above */
@@ -92,6 +92,13 @@ void chrdev_show(struct seq_file *f, off_t offset)
  *
  * Returns a -ve errno on failure.
  */
+
+/**
+ * register_chrdev_region()函数主要是注册主设备号和次设备号，major == 0,此函数
+ * 动态分配主设备号，major > 0时，申请分配指定的主设备，返回0表示申请成功，返回
+ * 负数表示申请失败。
+ */
+
 static struct char_device_struct *
 __register_chrdev_region(unsigned int major, unsigned int baseminor,
 			   int minorct, const char *name)
@@ -100,16 +107,16 @@ __register_chrdev_region(unsigned int major, unsigned int baseminor,
 	int ret = 0;
 	int i;
 
-	cd = kzalloc(sizeof(struct char_device_struct), GFP_KERNEL);
+	cd = kzalloc(sizeof(struct char_device_struct), GFP_KERNEL);	/*kaalloc()分配内存并且全部初始化为0*/
 	if (cd == NULL)
 		return ERR_PTR(-ENOMEM);
 
-	mutex_lock(&chrdevs_lock);
+	mutex_lock(&chrdevs_lock);		/*获取chrdevs_lock读写锁，并且关闭中断，禁止内核抢占，write_lock_irq*/
 
 	/* temporary */
-	if (major == 0) {
+	if (major == 0) {	/*下面动态申请主设备号*/
 		for (i = ARRAY_SIZE(chrdevs)-1; i > 0; i--) {
-			if (chrdevs[i] == NULL)
+			if (chrdevs[i] == NULL)		/*chrdevs是内核中已经注册设备号的一个数组*/
 				break;
 		}
 
@@ -118,23 +125,26 @@ __register_chrdev_region(unsigned int major, unsigned int baseminor,
 			goto out;
 		}
 		major = i;
-		ret = major;
+		ret = major;	/*这里得到一个未使用的设备号*/
 	}
 
+	/* 下面4句是对已经申请到的设备数据结构进行填充*/
 	cd->major = major;
 	cd->baseminor = baseminor;
-	cd->minorct = minorct;
+	cd->minorct = minorct;		/*申请设备号的个数*/
 	strncpy(cd->name,name, 64);
 
 	i = major_to_index(major);
 
+	/*以下部分将char_device_struct变量注册到内核*/
 	for (cp = &chrdevs[i]; *cp; cp = &(*cp)->next)
-		if ((*cp)->major > major ||
+		if ((*cp)->major > major ||		/*chardevs[i]设备号大于主设备号*/
 		    ((*cp)->major == major &&
-		     (((*cp)->baseminor >= baseminor) ||
+		     (((*cp)->baseminor >= baseminor) ||	/*chardevs[i]设备号等于主设备号，并且此设备号大于baseminor*/
 		      ((*cp)->baseminor + (*cp)->minorct > baseminor))))
 			break;
 
+	/*在字符数组中找到现在注册设备*/
 	/* Check for overlapping minor ranges.  */
 	if (*cp && (*cp)->major == major) {
 		int old_min = (*cp)->baseminor;
@@ -155,7 +165,8 @@ __register_chrdev_region(unsigned int major, unsigned int baseminor,
 		}
 	}
 
-	cd->next = *cp;
+	/*所申请的设备号能够满足*/
+	cd->next = *cp;		/*按照主设备号从小到大顺序排列*/
 	*cp = cd;
 	mutex_unlock(&chrdevs_lock);
 	return cd;
@@ -194,14 +205,16 @@ __unregister_chrdev_region(unsigned major, unsigned baseminor, int minorct)
  *
  * Return value is zero on success, a negative error code on failure.
  */
+
+/*分配和释放设备的编号*/
 int register_chrdev_region(dev_t from, unsigned count, const char *name)
 {
 	struct char_device_struct *cd;
 	dev_t to = from + count;
 	dev_t n, next;
 
-	for (n = from; n < to; n = next) {
-		next = MKDEV(MAJOR(n)+1, 0);
+	for (n = from; n < to; n = next) {	/*每次申请256个设备号*/
+		next = MKDEV(MAJOR(n)+1, 0);	/*主设备号加1得到的设备号，次设备号为0*/
 		if (next > to)
 			next = to;
 		cd = __register_chrdev_region(MAJOR(n), MINOR(n),
@@ -210,7 +223,7 @@ int register_chrdev_region(dev_t from, unsigned count, const char *name)
 			goto fail;
 	}
 	return 0;
-fail:
+fail:	/*当一次分配失败的时候，释放所有已经分配到的设备号*/
 	to = n;
 	for (n = from; n < to; n = next) {
 		next = MKDEV(MAJOR(n)+1, 0);

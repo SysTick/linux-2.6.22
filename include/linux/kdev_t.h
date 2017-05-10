@@ -2,11 +2,14 @@
 #define _LINUX_KDEV_T_H
 #ifdef __KERNEL__
 #define MINORBITS	20
-#define MINORMASK	((1U << MINORBITS) - 1)
-
-#define MAJOR(dev)	((unsigned int) ((dev) >> MINORBITS))
-#define MINOR(dev)	((unsigned int) ((dev) & MINORMASK))
-#define MKDEV(ma,mi)	(((ma) << MINORBITS) | (mi))
+#define MINORMASK	((1U << MINORBITS) - 1)		/*1U是什么意思，怎么查看1U的定义*/
+ /*
+  *		设备编号为unsigned int 为32位。
+  *		高12位用作主编号，低20位用作次编号。
+  */
+#define MAJOR(dev)	((unsigned int) ((dev) >> MINORBITS))	/*根据设备编号获得dev的主编号*/
+#define MINOR(dev)	((unsigned int) ((dev) & MINORMASK))	/*根据设备编号获得dev的次编号*/
+#define MKDEV(ma,mi)	(((ma) << MINORBITS) | (mi))	/*根据主编号ma和次编号mi来转化成设备编号*/ 
 
 #define print_dev_t(buffer, dev)					\
 	sprintf((buffer), "%u:%u\n", MAJOR(dev), MINOR(dev))
